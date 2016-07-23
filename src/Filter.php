@@ -20,7 +20,7 @@ class Filter
      *
      * @var array
      */
-    private $whitelistedFiles = [];
+    protected $whitelistedFiles = [];
 
     /**
      * Adds a directory to the whitelist (recursively).
@@ -47,8 +47,44 @@ class Filter
     public function addFileToWhitelist($filename)
     {
         if (file_exists($filename)) {
-            $this->whitelistedFiles[realpath($filename)] = true;
+            $this->whitelistedFiles[$this->realpath($filename)] = true;
         }
+    }
+
+    /**
+     * Like `realpath(), but works with Phar
+     *
+     * @param $filename
+     *
+     * @return string
+     */
+    protected function realpath($filename)
+    {
+        $realpath = realpath($filename);
+        if ($realpath) {
+            return $realpath;
+        }
+
+        $prefix = '';
+        $path   = explode('://', $filename, 2);
+        if (isset($path[1])) {
+            $prefix = array_shift($path).'://';
+        }
+        $path = $path[0];
+
+        $path  = str_replace(['\\', '/./'], '/', $path);
+        $parts = array_filter(explode('/', $path), 'strlen');
+        $stack = strpos($path, '/') === 0 ? [] : explode(DIRECTORY_SEPARATOR, getcwd());
+
+        foreach ($parts as $part) {
+            if ($part == '..') {
+                array_pop($part);
+            } else {
+                $stack[] = $part;
+            }
+        }
+
+        return "$prefix/".implode(DIRECTORY_SEPARATOR, $stack);
     }
 
     /**
@@ -87,7 +123,7 @@ class Filter
      */
     public function removeFileFromWhitelist($filename)
     {
-        $filename = realpath($filename);
+        $filename = $this->realpath($filename);
 
         unset($this->whitelistedFiles[$filename]);
     }
@@ -128,7 +164,7 @@ class Filter
             return true;
         }
 
-        $filename = realpath($filename);
+        $filename = $this->realpath($filename);
 
         return !isset($this->whitelistedFiles[$filename]);
     }
